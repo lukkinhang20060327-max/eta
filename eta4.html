@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>香港交通與天氣實時看板 (穩定升級版)</title>
+  <style>
+    :root {
+      --bg-color: #0d1117;
+      --card-bg-color: #1e2430;
+      --text-color: #c9d1d9;
+      --highlight-color: #ffffff;
+      --muted-color: #8b949e;
+      --kmb-color: #ff8c00;
+      --ctb-color: #ffd700;
+      --font-family: 'Helvetica Neue', Arial, '微軟正黑體', sans-serif;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      font-family: var(--font-family);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      width: 100vw;
+      overflow: hidden;
+    }
+
+    .container {
+      width: 95vw;
+      max-width: 1200px;
+      height: 90vh;
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 30px;
+    }
+
+    /* === 左半部：時間與交通 === */
+    .left-column {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .time-block { padding: 10px 20px; margin-bottom: 10px; }
+    .time { font-size: 7.5rem; font-weight: bold; color: var(--highlight-color); letter-spacing: 2px; line-height: 1.1; }
+    .date { font-size: 2.2rem; color: var(--muted-color); }
+
+    .eta-block {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      flex-grow: 1;
+    }
+
+    .eta-item {
+      background-color: #161b22;
+      border-radius: 15px;
+      padding: 20px 25px;
+      display: flex;
+      align-items: center;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+      border-left: 6px solid transparent;
+      transition: all 0.3s ease;
+    }
+
+    .eta-item.kmb { border-left-color: var(--kmb-color); }
+    .eta-item.ctb { border-left-color: var(--ctb-color); }
+
+    .route-badge {
+      border-radius: 8px;
+      padding: 10px 15px;
+      font-weight: bold;
+      font-size: 2rem;
+      min-width: 80px;
+      text-align: center;
+      border: 2px solid;
+    }
+
+    .eta-item.kmb .route-badge { border-color: var(--kmb-color); color: var(--highlight-color); }
+    .eta-item.ctb .route-badge { background-color: var(--ctb-color); border-color: var(--ctb-color); color: #000; }
+
+    .destination-group { margin-left: 20px; flex-grow: 1; }
+    .destination { font-size: 1.6rem; font-weight: bold; color: var(--highlight-color); }
+
+    .times-list { display: flex; gap: 20px; font-size: 2.2rem; font-weight: bold; color: var(--highlight-color); }
+    .no-service { font-size: 1.8rem; color: var(--muted-color); font-weight: normal; }
+
+    /* === 右半部：大型 iOS 天氣 === */
+    .weather-widget {
+      background: linear-gradient(180deg, #1e2d4a 0%, #151d30 100%);
+      border-radius: 30px;
+      padding: 30px;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      height: 100%;
+      box-sizing: border-box;
+    }
+
+    .weather-current {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 25px;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      padding-bottom: 20px;
+    }
+    .weather-current-left { display: flex; flex-direction: column; }
+    .weather-city { font-size: 2rem; color: var(--highlight-color); font-weight: 500; }
+    .weather-temp { font-size: 6.5rem; font-weight: 300; color: var(--highlight-color); line-height: 1.1; }
+    
+    .weather-current-right { text-align: right; display: flex; flex-direction: column; align-items: flex-end; justify-content: flex-end; height: 100%; }
+    .weather-icon-large { font-size: 3rem; margin-bottom: 5px; }
+    .weather-desc { font-size: 1.6rem; color: var(--highlight-color); font-weight: 500; }
+    .weather-highlow { font-size: 1.2rem; color: var(--highlight-color); opacity: 0.8; margin-top: 5px;}
+
+    .weather-hourly {
+      display: flex;
+      justify-content: space-between;
+      padding: 20px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      margin-bottom: 20px;
+    }
+    .hourly-item { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+    .hourly-time { font-size: 1.2rem; color: var(--highlight-color); opacity: 0.9; }
+    .hourly-icon { font-size: 2rem; }
+    .hourly-temp { font-size: 1.6rem; font-weight: 500; color: var(--highlight-color); }
+
+    .weather-daily { display: flex; flex-direction: column; flex-grow: 1; justify-content: space-around; }
+    .daily-item { display: flex; align-items: center; justify-content: space-between; font-size: 1.5rem; }
+    .daily-day { width: 60px; font-weight: 500; color: var(--highlight-color); }
+    .daily-icon { font-size: 1.8rem; width: 40px; text-align: center; }
+    .daily-min { width: 50px; text-align: right; color: var(--muted-color); }
+    
+    .daily-bar-container {
+      flex-grow: 1;
+      height: 6px;
+      background-color: rgba(255,255,255,0.1);
+      border-radius: 3px;
+      margin: 0 15px;
+      position: relative;
+    }
+    .daily-bar-fill {
+      position: absolute;
+      height: 100%;
+      background: linear-gradient(90deg, #58a6ff, #ff9800);
+      border-radius: 3px;
+      transition: all 1s ease;
+    }
+    .daily-max { width: 50px; text-align: left; font-weight: 500; color: var(--highlight-color); }
+
+    .footer { font-size: 1rem; color: var(--muted-color); text-align: right; padding-top: 10px; }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    
+    <div class="left-column">
+      <div class="time-block">
+        <div class="time" id="time">載入中</div>
+        <div class="date" id="date"></div>
+      </div>
+
+      <div class="eta-block">
+        <div class="eta-item kmb">
+          <div class="route-badge">296C</div>
+          <div class="destination-group"><div class="destination">長沙灣(海盈邨) ➔ 尚德</div></div>
+          <div class="times-list" id="eta-296C"><div class="no-service">連線中...</div></div>
+        </div>
+        <div class="eta-item ctb">
+          <div class="route-badge">701A</div>
+          <div class="destination-group"><div class="destination">海盈邨 ➔ 旺角</div></div>
+          <div class="times-list" id="eta-701A"><div class="no-service">連線中...</div></div>
+        </div>
+        <div class="eta-item kmb">
+          <div class="route-badge">36A</div>
+          <div class="destination-group"><div class="destination">長沙灣(海達邨) ➔ 梨木樹</div></div>
+          <div class="times-list" id="eta-36A"><div class="no-service">連線中...</div></div>
+        </div>
+      </div>
+      <div class="footer">無痛靜默更新 (每60秒) • API: KMB/CTB/Meteo</div>
+    </div>
+
+    <div class="right-column">
+      <div class="weather-widget">
+        <div class="weather-current">
+          <div class="weather-current-left">
+            <div class="weather-city">香港 (荔枝角)</div>
+            <div class="weather-temp" id="w-temp">--°</div>
+          </div>
+          <div class="weather-current-right">
+            <div class="weather-icon-large" id="w-icon">☁️</div>
+            <div class="weather-desc" id="w-desc">讀取中</div>
+            <div class="weather-highlow" id="w-hl">最高:--° 最低:--°</div>
+          </div>
+        </div>
+        <div class="weather-hourly" id="weather-hourly"><div class="no-service">載入每小時預報中...</div></div>
+        <div class="weather-daily" id="weather-daily"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // === 1. 時鐘系統 ===
+    function updateClock() {
+      const now = new Date();
+      document.getElementById('time').innerText = 
+        String(now.getHours()).padStart(2, '0') + ':' + 
+        String(now.getMinutes()).padStart(2, '0') + ':' + 
+        String(now.getSeconds()).padStart(2, '0');
+      document.getElementById('date').innerText = now.toLocaleDateString('zh-HK', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // === 2. 天氣系統 ===
+    const wmoCodeToText = {
+      0: { text: "晴天", icon: "☀️" }, 1: { text: "大致天晴", icon: "🌤️" },
+      2: { text: "部分多雲", icon: "⛅" }, 3: { text: "多雲", icon: "☁️" },
+      45: { text: "有霧", icon: "🌫️" }, 48: { text: "有霧", icon: "🌫️" },
+      51: { text: "微雨", icon: "🌧️" }, 53: { text: "微雨", icon: "🌧️" },
+      61: { text: "陣雨", icon: "🌦️" }, 63: { text: "雨", icon: "🌧️" },
+      65: { text: "大雨", icon: "🌧️" }, 80: { text: "陣雨", icon: "🌦️" },
+      95: { text: "雷暴", icon: "⛈️" }
+    };
+
+    function getWeatherInfo(code) { return wmoCodeToText[code] || { text: "多雲", icon: "☁️" }; }
+
+    async function fetchAdvancedWeather() {
+      try {
+        const url = 'https://api.open-meteo.com/v1/forecast?latitude=22.336&longitude=114.144&current=temperature_2m,weather_code&hourly=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=Asia%2FHong_Kong';
+        const res = await fetch(url);
+        const data = await res.json();
+
+        document.getElementById('w-temp').innerText = `${Math.round(data.current.temperature_2m)}°`;
+        const currentInfo = getWeatherInfo(data.current.weather_code);
+        document.getElementById('w-desc').innerText = currentInfo.text;
+        document.getElementById('w-icon').innerText = currentInfo.icon;
+        document.getElementById('w-hl').innerText = `最高:${Math.round(data.daily.temperature_2m_max[0])}° 最低:${Math.round(data.daily.temperature_2m_min[0])}°`;
+
+        const nowHour = new Date().getHours();
+        let hourlyHtml = '';
+        const currentIndex = data.hourly.time.findIndex(t => new Date(t).getHours() === nowHour && new Date(t).getDate() === new Date().getDate());
+        for(let i = currentIndex + 1; i <= currentIndex + 5; i++) {
+          hourlyHtml += `<div class="hourly-item"><div class="hourly-time">${String(new Date(data.hourly.time[i]).getHours()).padStart(2, '0')}:00</div><div class="hourly-icon">${getWeatherInfo(data.hourly.weather_code[i]).icon}</div><div class="hourly-temp">${Math.round(data.hourly.temperature_2m[i])}°</div></div>`;
+        }
+        document.getElementById('weather-hourly').innerHTML = hourlyHtml;
+
+        let dailyHtml = '';
+        const weekdays = ["週日", "週一", "週二", "週三", "週四", "週五", "週六"];
+        const weekMin = Math.min(...data.daily.temperature_2m_min.slice(0, 5));
+        const weekMax = Math.max(...data.daily.temperature_2m_max.slice(0, 5));
+        const range = weekMax - weekMin;
+
+        for(let i = 0; i < 5; i++) {
+          const dMin = Math.round(data.daily.temperature_2m_min[i]);
+          const dMax = Math.round(data.daily.temperature_2m_max[i]);
+          const leftPercent = ((dMin - weekMin) / range) * 100;
+          const widthPercent = ((dMax - dMin) / range) * 100;
+          dailyHtml += `<div class="daily-item"><div class="daily-day">${i === 0 ? "今天" : weekdays[new Date(data.daily.time[i]).getDay()]}</div><div class="daily-icon">${getWeatherInfo(data.daily.weather_code[i]).icon}</div><div class="daily-min">${dMin}°</div><div class="daily-bar-container"><div class="daily-bar-fill" style="left: ${leftPercent}%; width: ${widthPercent}%;"></div></div><div class="daily-max">${dMax}°</div></div>`;
+        }
+        document.getElementById('weather-daily').innerHTML = dailyHtml;
+      } catch (e) { console.error('天氣錯誤:', e); }
+    }
+
+    // === 3. ETA 交通系統 ===
+    let kmbStopMap = null;
+
+    function formatTime(isoString) {
+      if (!isoString) return null;
+      const d = new Date(isoString);
+      return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+    }
+
+    function renderETA(etas, elementId) {
+      const el = document.getElementById(elementId);
+      if (etas.length > 0) el.innerHTML = etas.slice(0, 3).map(e => `<div>${formatTime(e.eta)}</div>`).join('');
+      else el.innerHTML = '<div class="no-service">未來 60 分鐘無班次</div>';
+    }
+
+    // 將站點地圖的下載獨立出來，避免重複請求
+    async function initKmbMap() {
+      if (!kmbStopMap) {
+        try {
+          const res = await fetch('https://data.etabus.gov.hk/v1/transport/kmb/stop');
+          const json = await res.json();
+          kmbStopMap = {};
+          json.data.forEach(stop => {
+            if (!kmbStopMap[stop.name_tc]) kmbStopMap[stop.name_tc] = [];
+            kmbStopMap[stop.name_tc].push(stop.stop);
+          });
+        } catch (e) {
+          console.error("下載九巴站點失敗", e);
+          throw e;
+        }
+      }
+    }
+
+    async function fetchKmbEta(route, stopKeyword, destKeyword, elementId) {
+      try {
+        let targetUuids = [];
+        for (let name in kmbStopMap) {
+          if (name.includes(stopKeyword)) targetUuids = targetUuids.concat(kmbStopMap[name]);
+        }
+        let finalEtas = [];
+        for (let uuid of targetUuids) {
+          const res = await fetch(`https://data.etabus.gov.hk/v1/transport/kmb/eta/${uuid}/${route}/1`);
+          const json = await res.json();
+          if (json.data && json.data.length > 0) {
+            // 過濾正確的目的地
+            const validEtas = json.data.filter(e => e.dest_tc && e.dest_tc.includes(destKeyword) && e.eta);
+            if (validEtas.length > 0) {
+              finalEtas = validEtas;
+              break;
+            }
+          }
+        }
+        finalEtas.sort((a, b) => new Date(a.eta) - new Date(b.eta));
+        renderETA(finalEtas, elementId);
+      } catch (e) {
+        document.getElementById(elementId).innerHTML = '<div class="no-service">載入失敗</div>';
+      }
+    }
+
+    async function fetchCtbEta() {
+      try {
+        const res = await fetch(`https://rt.data.gov.hk/v1/transport/citybus-nwfb/eta/CTB/003544/701A`);
+        const json = await res.json();
+        let finalEtas = [];
+        if (json.data && json.data.length > 0) {
+          finalEtas = json.data.filter(e => e.dest_tc && e.dest_tc.includes("旺角") && e.eta);
+          finalEtas.sort((a, b) => new Date(a.eta) - new Date(b.eta));
+        }
+        renderETA(finalEtas, 'eta-701A');
+      } catch (e) {
+        document.getElementById('eta-701A').innerHTML = '<div class="no-service">載入失敗</div>';
+      }
+    }
+
+    // === 4. 依序執行更新機制 (避免阻擋) ===
+    async function backgroundRefresh() {
+      try {
+        await fetchAdvancedWeather();
+      } catch(e) { console.error(e); }
+
+      try {
+        // 先確保站點名單下載完畢
+        await initKmbMap();
+        // 依序排隊查詢，不再同時並發塞爆網路
+        await fetchKmbEta('296C', '海盈', '尚德', 'eta-296C');
+        await fetchCtbEta();
+        await fetchKmbEta('36A', '海達', '梨木樹', 'eta-36A');
+      } catch (e) {
+        console.error('交通資料更新失敗', e);
+      }
+    }
+
+    // 初次載入
+    backgroundRefresh();
+
+    // 設定每 60 秒背景自動更新一次 (取代 location.reload)
+    setInterval(backgroundRefresh, 60000);
+
+  </script>
+</body>
+</html>
